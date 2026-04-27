@@ -10,6 +10,7 @@ import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -23,7 +24,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@AssignmentHints(value = {"SqlStringInjectionHint3-1", "SqlStringInjectionHint3-2"})
+@AssignmentHints(value = { "SqlStringInjectionHint3-1", "SqlStringInjectionHint3-2" })
 public class SqlInjectionLesson3 implements AssignmentEndpoint {
 
   private final LessonDataSource dataSource;
@@ -40,24 +41,33 @@ public class SqlInjectionLesson3 implements AssignmentEndpoint {
 
   protected AttackResult injectableQuery(String query) {
     try (Connection connection = dataSource.getConnection()) {
-      try (Statement statement =
-          connection.createStatement(TYPE_SCROLL_INSENSITIVE, CONCUR_READ_ONLY)) {
-        Statement checkStatement =
-            connection.createStatement(TYPE_SCROLL_INSENSITIVE, CONCUR_READ_ONLY);
-        statement.executeUpdate(query);
-        ResultSet results =
-            checkStatement.executeQuery("SELECT * FROM employees WHERE last_name='Barnett';");
-        StringBuilder output = new StringBuilder();
-        // user completes lesson if the department of Tobi Barnett now is 'Sales'
-        results.first();
-        if (results.getString("department").equals("Sales")) {
-          output.append("<span class='feedback-positive'>" + query + "</span>");
-          output.append(SqlInjectionLesson8.generateTable(results));
-          return success(this).output(output.toString()).build();
-        } else {
-          return failed(this).output(output.toString()).build();
-        }
+      // Remediation: Prevent arbitrary SQL execution.
+      // Whitelist the expected UPDATE command.
+      if (!query.trim().equalsIgnoreCase("UPDATE employees SET department = 'Sales' WHERE last_name = 'Barnett'")) {
+        return failed(this).feedback("Unauthorized SQL command.").build();
+      }
 
+      String safeQuery = "UPDATE employees SET department = ? WHERE last_name = ?";
+      try (PreparedStatement statement = connection.prepareStatement(safeQuery)) {
+        statement.setString(1, "Sales");
+        statement.setString(2, "Barnett");
+        statement.executeUpdate();
+
+        try (PreparedStatement checkStatement = connection
+            .prepareStatement("SELECT * FROM employees WHERE last_name = ?")) {
+          checkStatement.setString(1, "Barnett");
+          ResultSet results = checkStatement.executeQuery();
+          StringBuilder output = new StringBuilder();
+          // user completes lesson if the department of Tobi Barnett now is 'Sales'
+          results.first();
+          if (results.getString("department").equals("Sales")) {
+            output.append("<span class='feedback-positive'>" + query + "</span>");
+            output.append(SqlInjectionLesson8.generateTable(results));
+            return success(this).output(output.toString()).build();
+          } else {
+            return failed(this).output(output.toString()).build();
+          }
+        }
       } catch (SQLException sqle) {
         return failed(this).output(sqle.getMessage()).build();
       }

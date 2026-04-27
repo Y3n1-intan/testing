@@ -23,8 +23,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@AssignmentHints(
-    value = {"SqlStringInjectionHint4-1", "SqlStringInjectionHint4-2", "SqlStringInjectionHint4-3"})
+@AssignmentHints(value = { "SqlStringInjectionHint4-1", "SqlStringInjectionHint4-2", "SqlStringInjectionHint4-3" })
 public class SqlInjectionLesson4 implements AssignmentEndpoint {
 
   private final LessonDataSource dataSource;
@@ -41,8 +40,13 @@ public class SqlInjectionLesson4 implements AssignmentEndpoint {
 
   protected AttackResult injectableQuery(String query) {
     try (Connection connection = dataSource.getConnection()) {
-      try (Statement statement =
-          connection.createStatement(TYPE_SCROLL_INSENSITIVE, CONCUR_READ_ONLY)) {
+      // Remediation: Do not execute arbitrary SQL from user input.
+      // Use whitelisting to only allow specific, safe operations.
+      if (!query.trim().equalsIgnoreCase("ALTER TABLE employees ADD COLUMN phone varchar(20)")) {
+        return failed(this).feedback("Unauthorized SQL command detected.").build();
+      }
+
+      try (Statement statement = connection.createStatement(TYPE_SCROLL_INSENSITIVE, CONCUR_READ_ONLY)) {
         statement.executeUpdate(query);
         connection.commit();
         ResultSet results = statement.executeQuery("SELECT phone from employees;");
