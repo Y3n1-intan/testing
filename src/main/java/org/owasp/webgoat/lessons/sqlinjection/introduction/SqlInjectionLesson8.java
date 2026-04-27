@@ -10,6 +10,7 @@ import static org.owasp.webgoat.container.assignments.AttackResultBuilder.failed
 import static org.owasp.webgoat.container.assignments.AttackResultBuilder.success;
 
 import java.sql.*;
+import java.sql.PreparedStatement;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import org.owasp.webgoat.container.LessonDataSource;
@@ -22,14 +23,13 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@AssignmentHints(
-    value = {
-      "SqlStringInjectionHint.8.1",
-      "SqlStringInjectionHint.8.2",
-      "SqlStringInjectionHint.8.3",
-      "SqlStringInjectionHint.8.4",
-      "SqlStringInjectionHint.8.5"
-    })
+@AssignmentHints(value = {
+    "SqlStringInjectionHint.8.1",
+    "SqlStringInjectionHint.8.2",
+    "SqlStringInjectionHint.8.3",
+    "SqlStringInjectionHint.8.4",
+    "SqlStringInjectionHint.8.5"
+})
 public class SqlInjectionLesson8 implements AssignmentEndpoint {
 
   private final LessonDataSource dataSource;
@@ -46,20 +46,15 @@ public class SqlInjectionLesson8 implements AssignmentEndpoint {
 
   protected AttackResult injectableQueryConfidentiality(String name, String auth_tan) {
     StringBuilder output = new StringBuilder();
-    String query =
-        "SELECT * FROM employees WHERE last_name = '"
-            + name
-            + "' AND auth_tan = '"
-            + auth_tan
-            + "'";
+    String query = "SELECT * FROM employees WHERE last_name = ? AND auth_tan = ?";
 
     try (Connection connection = dataSource.getConnection()) {
-      try {
-        Statement statement =
-            connection.createStatement(
-                ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE);
-        log(connection, query);
-        ResultSet results = statement.executeQuery(query);
+      try (PreparedStatement statement = connection.prepareStatement(
+          query, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_UPDATABLE)) {
+        log(connection, query, name, auth_tan);
+        statement.setString(1, name);
+        statement.setString(2, auth_tan);
+        ResultSet results = statement.executeQuery();
 
         if (results.getStatement() != null) {
           if (results.first()) {
@@ -128,18 +123,19 @@ public class SqlInjectionLesson8 implements AssignmentEndpoint {
     return (table.toString());
   }
 
-  public static void log(Connection connection, String action) {
+  public static void log(Connection connection, String query, String name, String auth_tan) {
+    String action = query.replaceFirst("\\?", name).replaceFirst("\\?", auth_tan);
     action = action.replace('\'', '"');
     Calendar cal = Calendar.getInstance();
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     String time = sdf.format(cal.getTime());
 
-    String logQuery =
-        "INSERT INTO access_log (time, action) VALUES ('" + time + "', '" + action + "')";
+    String logQuery = "INSERT INTO access_log (time, action) VALUES (?, ?)";
 
-    try {
-      Statement statement = connection.createStatement(TYPE_SCROLL_SENSITIVE, CONCUR_UPDATABLE);
-      statement.executeUpdate(logQuery);
+    try (PreparedStatement statement = connection.prepareStatement(logQuery, TYPE_SCROLL_SENSITIVE, CONCUR_UPDATABLE)) {
+      statement.setString(1, time);
+      statement.setString(2, action);
+      statement.executeUpdate();
     } catch (SQLException e) {
       System.err.println(e.getMessage());
     }

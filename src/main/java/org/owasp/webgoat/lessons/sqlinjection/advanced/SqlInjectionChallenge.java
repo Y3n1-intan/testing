@@ -20,16 +20,15 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@AssignmentHints(
-    value = {
-      "SqlInjectionChallenge1",
-      "SqlInjectionChallenge2",
-      "SqlInjectionChallenge3",
-      "SqlInjectionChallenge4",
-      "SqlInjectionChallenge5",
-      "SqlInjectionChallenge6",
-      "SqlInjectionChallenge7"
-    })
+@AssignmentHints(value = {
+    "SqlInjectionChallenge1",
+    "SqlInjectionChallenge2",
+    "SqlInjectionChallenge3",
+    "SqlInjectionChallenge4",
+    "SqlInjectionChallenge5",
+    "SqlInjectionChallenge6",
+    "SqlInjectionChallenge7"
+})
 @Slf4j
 public class SqlInjectionChallenge implements AssignmentEndpoint {
 
@@ -51,10 +50,10 @@ public class SqlInjectionChallenge implements AssignmentEndpoint {
     if (attackResult == null) {
 
       try (Connection connection = dataSource.getConnection()) {
-        String checkUserQuery =
-            "select userid from sql_challenge_users where userid = '" + username + "'";
-        Statement statement = connection.createStatement();
-        ResultSet resultSet = statement.executeQuery(checkUserQuery);
+        String checkUserQuery = "select userid from sql_challenge_users where userid = ?";
+        try (PreparedStatement statement = connection.prepareStatement(checkUserQuery)) {
+          statement.setString(1, username);
+          ResultSet resultSet = statement.executeQuery();
 
         if (resultSet.next()) {
           attackResult = failed(this).feedback("user.exists").feedbackArgs(username).build();

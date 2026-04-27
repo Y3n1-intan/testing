@@ -14,6 +14,7 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SigningKeyResolverAdapter;
 import io.jsonwebtoken.impl.TextCodec;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import org.apache.commons.lang3.StringUtils;
@@ -30,12 +31,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @AssignmentHints({
-  "jwt-kid-hint1",
-  "jwt-kid-hint2",
-  "jwt-kid-hint3",
-  "jwt-kid-hint4",
-  "jwt-kid-hint5",
-  "jwt-kid-hint6"
+    "jwt-kid-hint1",
+    "jwt-kid-hint2",
+    "jwt-kid-hint3",
+    "jwt-kid-hint4",
+    "jwt-kid-hint5",
+    "jwt-kid-hint6"
 })
 @RequestMapping("/JWT/")
 public class JWTHeaderKIDEndpoint implements AssignmentEndpoint {
@@ -60,30 +61,29 @@ public class JWTHeaderKIDEndpoint implements AssignmentEndpoint {
       return failed(this).feedback("jwt-invalid-token").build();
     } else {
       try {
-        final String[] errorMessage = {null};
-        Jwt jwt =
-            Jwts.parser()
-                .setSigningKeyResolver(
-                    new SigningKeyResolverAdapter() {
-                      @Override
-                      public byte[] resolveSigningKeyBytes(JwsHeader header, Claims claims) {
-                        final String kid = (String) header.get("kid");
-                        try (var connection = dataSource.getConnection()) {
-                          ResultSet rs =
-                              connection
-                                  .createStatement()
-                                  .executeQuery(
-                                      "SELECT key FROM jwt_keys WHERE id = '" + kid + "'");
-                          while (rs.next()) {
-                            return TextCodec.BASE64.decode(rs.getString(1));
-                          }
-                        } catch (SQLException e) {
-                          errorMessage[0] = e.getMessage();
+        final String[] errorMessage = { null };
+        Jwt jwt = Jwts.parser()
+            .setSigningKeyResolver(
+                new SigningKeyResolverAdapter() {
+                  @Override
+                  public byte[] resolveSigningKeyBytes(JwsHeader header, Claims claims) {
+                    final String kid = (String) header.get("kid");
+                    try (var connection = dataSource.getConnection()) {
+                      try (PreparedStatement stmt = connection.prepareStatement(
+                          "SELECT key FROM jwt_keys WHERE id = ?")) {
+                        stmt.setString(1, kid);
+                        ResultSet rs = stmt.executeQuery();
+                        while (rs.next()) {
+                          return TextCodec.BASE64.decode(rs.getString(1));
                         }
-                        return null;
                       }
-                    })
-                .parseClaimsJws(token);
+                    } catch (SQLException e) {
+                      errorMessage[0] = e.getMessage();
+                    }
+                    return null;
+                  }
+                })
+            .parseClaimsJws(token);
         if (errorMessage[0] != null) {
           return failed(this).output(errorMessage[0]).build();
         }

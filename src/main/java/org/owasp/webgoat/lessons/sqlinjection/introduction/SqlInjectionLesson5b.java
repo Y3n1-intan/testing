@@ -19,13 +19,12 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@AssignmentHints(
-    value = {
-      "SqlStringInjectionHint5b1",
-      "SqlStringInjectionHint5b2",
-      "SqlStringInjectionHint5b3",
-      "SqlStringInjectionHint5b4"
-    })
+@AssignmentHints(value = {
+    "SqlStringInjectionHint5b1",
+    "SqlStringInjectionHint5b2",
+    "SqlStringInjectionHint5b3",
+    "SqlStringInjectionHint5b4"
+})
 public class SqlInjectionLesson5b implements AssignmentEndpoint {
 
   private final LessonDataSource dataSource;
@@ -42,11 +41,10 @@ public class SqlInjectionLesson5b implements AssignmentEndpoint {
   }
 
   protected AttackResult injectableQuery(String login_count, String accountName) {
-    String queryString = "SELECT * From user_data WHERE Login_Count = ? and userid= " + accountName;
+    String queryString = "SELECT * From user_data WHERE Login_Count = ? and userid= ?";
     try (Connection connection = dataSource.getConnection()) {
-      PreparedStatement query =
-          connection.prepareStatement(
-              queryString, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
+      PreparedStatement query = connection.prepareStatement(
+          queryString, ResultSet.TYPE_SCROLL_INSENSITIVE, ResultSet.CONCUR_READ_ONLY);
 
       int count = 0;
       try {
@@ -58,12 +56,14 @@ public class SqlInjectionLesson5b implements AssignmentEndpoint {
                     + login_count
                     + " to a number"
                     + "<br> Your query was: "
-                    + queryString.replace("?", login_count))
+                    + queryString.replaceFirst("\\?", login_count).replaceFirst("\\?", accountName))
             .build();
       }
 
       query.setInt(1, count);
-      // String query = "SELECT * FROM user_data WHERE Login_Count = " + login_count + " and userid
+      query.setString(2, accountName);
+      // String query = "SELECT * FROM user_data WHERE Login_Count = " + login_count +
+      // " and userid
       // = " + accountName, ;
       try {
         ResultSet results = query.executeQuery();
@@ -79,7 +79,8 @@ public class SqlInjectionLesson5b implements AssignmentEndpoint {
           if (results.getRow() >= 6) {
             return success(this)
                 .feedback("sql-injection.5b.success")
-                .output("Your query was: " + queryString.replace("?", login_count))
+                .output(
+                    "Your query was: " + queryString.replaceFirst("\\?", login_count).replaceFirst("\\?", accountName))
                 .feedbackArgs(output.toString())
                 .build();
           } else {
@@ -87,21 +88,23 @@ public class SqlInjectionLesson5b implements AssignmentEndpoint {
                 .output(
                     output.toString()
                         + "<br> Your query was: "
-                        + queryString.replace("?", login_count))
+                        + queryString.replaceFirst("\\?", login_count).replaceFirst("\\?", accountName))
                 .build();
           }
 
         } else {
           return failed(this)
               .feedback("sql-injection.5b.no.results")
-              .output("Your query was: " + queryString.replace("?", login_count))
+              .output(
+                  "Your query was: " + queryString.replaceFirst("\\?", login_count).replaceFirst("\\?", accountName))
               .build();
         }
       } catch (SQLException sqle) {
 
         return failed(this)
             .output(
-                sqle.getMessage() + "<br> Your query was: " + queryString.replace("?", login_count))
+                sqle.getMessage() + "<br> Your query was: "
+                    + queryString.replaceFirst("\\?", login_count).replaceFirst("\\?", accountName))
             .build();
       }
     } catch (Exception e) {
@@ -111,7 +114,7 @@ public class SqlInjectionLesson5b implements AssignmentEndpoint {
                   + " : "
                   + e.getMessage()
                   + "<br> Your query was: "
-                  + queryString.replace("?", login_count))
+                  + queryString.replaceFirst("\\?", login_count).replaceFirst("\\?", accountName))
           .build();
     }
   }
